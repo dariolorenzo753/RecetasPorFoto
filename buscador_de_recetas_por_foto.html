@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chef Heladera AI - Recetas con lo que tienes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .pulse-scanner {
+            position: absolute;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, transparent, #22c55e, transparent);
+            animation: scan 2s infinite ease-in-out;
+        }
+        @keyframes scan {
+            0% { top: 0%; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
+            100% { top: 95%; opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen font-sans flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-200">
+                    <i class="fa-solid font-bold fa-utensils text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">FridgeChef AI</h1>
+                    <p class="text-xs text-slate-400">Escanea tu heladera, cocina sin desperdiciar</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium border border-emerald-200 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Gemini 3 Flash Vision
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-5xl mx-auto px-4 py-8 flex-grow w-full">
+        <!-- Hero Title -->
+        <div class="text-center max-w-2xl mx-auto mb-8">
+            <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+                ¿Qué cenamos hoy con lo que hay?
+            </h2>
+            <p class="mt-2 text-slate-600 text-sm sm:text-base">
+                Sube una foto clara del interior de tu heladera o alacena. Nuestra IA detectará todos tus productos y te sugerirá recetas deliciosas al instante.
+            </p>
+        </div>
+
+        <!-- Upload / Camera Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+            
+            <!-- Upload Box -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col items-center justify-center min-h-[380px] relative overflow-hidden transition-all duration-300 hover:border-emerald-300">
+                
+                <input type="file" id="fileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+                
+                <!-- Scanner Animation Effect -->
+                <div id="scanLine" class="pulse-scanner hidden"></div>
+
+                <!-- Empty State UI -->
+                <div id="uploadPlaceholder" class="text-center p-6 flex flex-col items-center">
+                    <div class="w-20 h-20 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 text-3xl shadow-inner">
+                        <i class="fa-solid fa-camera"></i>
+                    </div>
+                    <h3 class="font-semibold text-slate-800 text-lg mb-1">Sube o toma una foto</h3>
+                    <p class="text-xs text-slate-500 max-w-xs mb-6">Asegúrate de que los alimentos y paquetes se vean lo más claros posible.</p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3 w-full max-w-xs">
+                        <button onclick="document.getElementById('fileInput').click()" class="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium rounded-xl shadow-md shadow-emerald-200 transition text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-upload"></i> Subir imagen
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Preview State UI -->
+                <div id="previewContainer" class="hidden w-full h-full flex-col items-center relative">
+                    <img id="imagePreview" src="" alt="Vista previa de la heladera" class="max-h-[320px] w-auto object-contain rounded-xl border border-slate-200 shadow-sm">
+                    
+                    <div class="mt-4 flex gap-3 w-full">
+                        <button onclick="resetImage()" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-medium text-sm transition flex items-center justify-center gap-1.5">
+                            <i class="fa-solid fa-arrow-rotate-left"></i> Cambiar
+                        </button>
+                        <button id="analyzeBtn" onclick="analyzeFridge()" class="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold rounded-xl shadow-md shadow-emerald-200 transition text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Analizar Heladera
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preferences & Options Panel -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col gap-5">
+                <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-emerald-600"></i> Preferencias de Cocina
+                </h3>
+
+                <!-- Dietary restrictions -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Restricciones Dietéticas</label>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="toggleTag(this)" class="tag-btn text-xs font-medium px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-emerald-400 transition" data-value="Vegetariano">🌱 Vegetariano</button>
+                        <button type="button" onclick="toggleTag(this)" class="tag-btn text-xs font-medium px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-emerald-400 transition" data-value="Vegano">🥬 Vegano</button>
+                        <button type="button" onclick="toggleTag(this)" class="tag-btn text-xs font-medium px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-emerald-400 transition" data-value="Sin Gluten / Celiaco">🌾 Sin Gluten</button>
+                        <button type="button" onclick="toggleTag(this)" class="tag-btn text-xs font-medium px-3 py-2 rounded-xl border border-slate-200 text-slate-600 hover:border-emerald-400 transition" data-value="Keto / Bajo en Carbos">🥩 Keto</button>
+                    </div>
+                </div>
+
+                <!-- Meal Type -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Tipo de Comida</label>
+                    <select id="mealType" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <option value="Cualquiera">Cualquier ocasión</option>
+                        <option value="Rápida (< 20 mins)">Rápida y Rápida (< 20 mins)</option>
+                        <option value="Almuerzo / Cena">Almuerzo / Cena principal</option>
+                        <option value="Desayuno / Merienda">Desayuno / Merienda</option>
+                        <option value="Snack / Picoteo">Snack / Postre</option>
+                    </select>
+                </div>
+
+                <!-- Pantry Basics option -->
+                <div class="bg-emerald-50/60 rounded-xl p-3.5 border border-emerald-100 flex items-start gap-3">
+                    <input type="checkbox" id="assumePantry" checked class="mt-1 rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+                    <label for="assumePantry" class="text-xs text-slate-600 cursor-pointer">
+                        <span class="font-semibold text-slate-800 block">Asumir condimentos básicos</span>
+                        Asume que tienes sal, pimienta, aceite de oliva, agua y especias comunes en casa.
+                    </label>
+                </div>
+
+                <!-- Extra Notes -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Notas o ingrediente extra opcional</label>
+                    <input type="text" id="extraIngredients" placeholder="Ej: Tengo arroz cocido de ayer, quiero algo picante..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingState" class="hidden my-12 text-center py-10 bg-white rounded-2xl border border-slate-200 shadow-sm">
+            <div class="inline-block relative w-16 h-16 mb-4">
+                <div class="w-16 h-16 rounded-full border-4 border-emerald-200 border-t-emerald-600 animate-spin"></div>
+                <div class="absolute inset-0 flex items-center justify-center text-emerald-600">
+                    <i class="fa-solid fa-utensils text-sm"></i>
+                </div>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800">Analizando el contenido de tu heladera...</h3>
+            <p class="text-xs text-slate-500 mt-1" id="loadingStepText">Identificando verduras, lácteos, carnes y salsas...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultsSection" class="hidden mt-10 space-y-8">
+            
+            <!-- Detected Ingredients Badge Bar -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="font-bold text-slate-800 flex items-center gap-2">
+                        <i class="fa-solid fa-basket-shopping text-emerald-600"></i> Ingredientes detectados en la imagen
+                    </h3>
+                    <span id="ingredientCount" class="text-xs font-semibold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full">0 detectados</span>
+                </div>
+                <div id="detectedIngredientsList" class="flex flex-wrap gap-2">
+                    <!-- Badges will be rendered here dynamically -->
+                </div>
+            </div>
+
+            <!-- Recipes Showcase -->
+            <div>
+                <h3 class="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-2.5">
+                    <i class="fa-solid fa-book-open text-emerald-600"></i> Recetas Recomendadas
+                </h3>
+                
+                <div id="recipesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Recipe cards dynamically populated here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Recipe Detail Modal -->
+    <div id="recipeModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 flex flex-col relative animate-fade-in">
+            <button onclick="closeModal()" class="absolute top-4 right-4 w-9 h-9 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition z-10">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+
+            <div class="p-6 sm:p-8">
+                <div class="flex items-center gap-2 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2" id="modalCategory">
+                    Fácil y Rápido
+                </div>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mb-4" id="modalTitle">
+                    Nombre de la Receta
+                </h2>
+
+                <p class="text-slate-600 text-sm mb-6 leading-relaxed" id="modalDescription">
+                    Descripción detallada de la receta.
+                </p>
+
+                <!-- Key Metrics -->
+                <div class="grid grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl mb-6 text-center border border-slate-100">
+                    <div>
+                        <span class="block text-xs text-slate-400 font-medium">Tiempo</span>
+                        <span class="text-sm font-bold text-slate-700" id="modalTime">20 mins</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-400 font-medium">Dificultad</span>
+                        <span class="text-sm font-bold text-slate-700" id="modalDifficulty">Fácil</span>
+                    </div>
+                    <div>
+                        <span class="block text-xs text-slate-400 font-medium">Coincidencia</span>
+                        <span class="text-sm font-bold text-emerald-600" id="modalMatch">90%</span>
+                    </div>
+                </div>
+
+                <!-- Ingredients List -->
+                <div class="mb-6">
+                    <h4 class="font-bold text-slate-800 text-base mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-emerald-600"></i> Ingredientes Necesarios
+                    </h4>
+                    <ul class="space-y-2 text-sm text-slate-600" id="modalIngredients">
+                        <!-- Items rendered dynamically -->
+                    </ul>
+                </div>
+
+                <!-- Steps -->
+                <div>
+                    <h4 class="font-bold text-slate-800 text-base mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-fire-burner text-emerald-600"></i> Paso a Paso
+                    </h4>
+                    <ol class="space-y-4 text-sm text-slate-600" id="modalSteps">
+                        <!-- Steps rendered dynamically -->
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onclick="closeModal()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-sm transition">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let selectedBase64Image = null;
+        let selectedMimeType = "image/jpeg";
+        let activeTags = [];
+        let currentRecipes = [];
+
+        // Toggle restriction tags
+        function toggleTag(btn) {
+            const val = btn.getAttribute('data-value');
+            if (activeTags.includes(val)) {
+                activeTags = activeTags.filter(t => t !== val);
+                btn.classList.remove('bg-emerald-600', 'text-white', 'border-emerald-600');
+                btn.classList.add('border-slate-200', 'text-slate-600');
+            } else {
+                activeTags.push(val);
+                btn.classList.add('bg-emerald-600', 'text-white', 'border-emerald-600');
+                btn.classList.remove('border-slate-200', 'text-slate-600');
+            }
+        }
+
+        // Handle Image Selection
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            selectedMimeType = file.type || "image/jpeg";
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const fullResult = e.target.result;
+                // Extract pure base64
+                selectedBase64Image = fullResult.split(',')[1];
+
+                // Update Preview UI
+                document.getElementById('imagePreview').src = fullResult;
+                document.getElementById('uploadPlaceholder').classList.add('hidden');
+                document.getElementById('previewContainer').classList.remove('hidden');
+                document.getElementById('previewContainer').classList.add('flex');
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // Reset Selected Image
+        function resetImage() {
+            selectedBase64Image = null;
+            document.getElementById('fileInput').value = "";
+            document.getElementById('previewContainer').classList.add('hidden');
+            document.getElementById('previewContainer').classList.remove('flex');
+            document.getElementById('uploadPlaceholder').classList.remove('hidden');
+            document.getElementById('resultsSection').classList.add('hidden');
+        }
+
+        // Exponential Backoff Fetch Helper
+        async function fetchWithBackoff(url, options, maxRetries = 3) {
+            let delay = 1000;
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                        continue;
+                    }
+                    return response;
+                } catch (err) {
+                    if (i === maxRetries - 1) throw err;
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+            throw new Error("Máximo de reintentos superado.");
+        }
+
+        // Main Analysis Call using Gemini Vision API
+        async function analyzeFridge() {
+            if (!selectedBase64Image) {
+                alert("Por favor sube o toma una foto primero.");
+                return;
+            }
+
+            // UI Adjustments for Loading
+            document.getElementById('resultsSection').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('scanLine').classList.remove('hidden');
+            document.getElementById('analyzeBtn').disabled = true;
+
+            const mealType = document.getElementById('mealType').value;
+            const assumePantry = document.getElementById('assumePantry').checked;
+            const extraNotes = document.getElementById('extraIngredients').value;
+
+            // System prompt & user prompt setup
+            const systemPrompt = `Eres un chef profesional con estrella Michelin especializado en aprovechar ingredientes y evitar el desperdicio de alimentos.
+Tu tarea es examinar la foto de la heladera/alacena, hacer un inventario minucioso de lo que ves y proponer recetas deliciosas, creativas e instructivas.`;
+
+            const userPrompt = `Analiza detenidamente esta imagen de mi heladera/alacena.
+1. Lista todos los ingredientes y productos que puedas reconocer de forma clara o probable.
+2. Basándote principalmente en esos ingredientes identificados (más los condimentos básicos si está activado), sugiere de 3 a 4 recetas exquisitas que se puedan preparar.
+
+Preferencias del usuario:
+- Restricciones dietéticas: ${activeTags.length > 0 ? activeTags.join(', ') : 'Ninguna'}.
+- Tipo de plato deseado: ${mealType}.
+- Asumir despensa básica (sal, aceite, pimienta, etc.): ${assumePantry ? 'Sí' : 'No'}.
+- Notas o extras del usuario: ${extraNotes || 'Ninguna'}.
+
+RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquema:
+{
+  "detected_ingredients": ["Ingrediente 1", "Ingrediente 2", ...],
+  "recipes": [
+    {
+      "id": "receta-1",
+      "title": "Nombre del Plato",
+      "description": "Una breve y tentadora descripción del plato.",
+      "prep_time": "20 mins",
+      "difficulty": "Fácil",
+      "match_percentage": 95,
+      "category": "Almuerzo Rápido",
+      "ingredients": [
+        {"name": "Tomate", "amount": "2 unidades", "available": true},
+        {"name": "Quedo Mozzarella", "amount": "100g", "available": true},
+        {"name": "Albahaca", "amount": "Un puñado", "available": false}
+      ],
+      "steps": [
+        "Cortar los tomates en rodajas...",
+        "Colocar el queso sobre el plato..."
+      ]
+    }
+  ]
+}`;
+
+            const payload = {
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            { text: userPrompt },
+                            {
+                                inlineData: {
+                                    mimeType: selectedMimeType,
+                                    data: selectedBase64Image
+                                }
+                            }
+                        ]
+                    }
+                ],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            const apiKey = ""; // Runtime automatically injects the API key
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetchWithBackoff(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                
+                if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+                    const rawJson = result.candidates[0].content.parts[0].text;
+                    const parsedData = JSON.parse(rawJson);
+                    
+                    renderResults(parsedData);
+                } else {
+                    throw new Error("No se pudo interpretar el formato de respuesta del modelo.");
+                }
+
+            } catch (error) {
+                console.error("Error al analizar la imagen:", error);
+                alert("Ocurrió un error al procesar la imagen con la Inteligencia Artificial. Inténtalo de nuevo.");
+            } finally {
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('scanLine').classList.add('hidden');
+                document.getElementById('analyzeBtn').disabled = false;
+            }
+        }
+
+        // Render ingredients and recipes onto the DOM
+        function renderResults(data) {
+            const ingredientsContainer = document.getElementById('detectedIngredientsList');
+            const ingredientCount = document.getElementById('ingredientCount');
+            const recipesGrid = document.getElementById('recipesGrid');
+
+            // 1. Render Detected Ingredients
+            ingredientsContainer.innerHTML = '';
+            const ingredients = data.detected_ingredients || [];
+            ingredientCount.textContent = `${ingredients.length} detectados`;
+
+            if (ingredients.length === 0) {
+                ingredientsContainer.innerHTML = '<span class="text-xs text-slate-400">No se detectaron productos claramente.</span>';
+            } else {
+                ingredients.forEach(item => {
+                    const badge = document.createElement('span');
+                    badge.className = 'text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl font-medium border border-slate-200 flex items-center gap-1.5 transition';
+                    badge.innerHTML = `<i class="fa-solid fa-check text-emerald-500 text-[10px]"></i> ${item}`;
+                    ingredientsContainer.appendChild(badge);
+                });
+            }
+
+            // 2. Render Recipes
+            recipesGrid.innerHTML = '';
+            currentRecipes = data.recipes || [];
+
+            if (currentRecipes.length === 0) {
+                recipesGrid.innerHTML = '<p class="col-span-full text-center text-slate-500 py-8">No encontramos recetas suficientes con lo visto. Intenta subir otra foto más clara.</p>';
+            } else {
+                currentRecipes.forEach((recipe, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md hover:border-emerald-300 transition duration-300 flex flex-col justify-between';
+                    
+                    card.innerHTML = `
+                        <div class="p-6">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <span class="text-[11px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                                    ${recipe.category || 'Receta Sugerida'}
+                                </span>
+                                <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                    ${recipe.match_percentage || 90}% match
+                                </span>
+                            </div>
+                            
+                            <h4 class="text-lg font-bold text-slate-900 mb-2 line-clamp-1">${recipe.title}</h4>
+                            <p class="text-xs text-slate-500 mb-4 line-clamp-2 leading-relaxed">${recipe.description}</p>
+                            
+                            <div class="flex items-center gap-4 text-xs text-slate-500 font-medium pt-3 border-t border-slate-100">
+                                <span class="flex items-center gap-1"><i class="fa-regular fa-clock text-slate-400"></i> ${recipe.prep_time}</span>
+                                <span class="flex items-center gap-1"><i class="fa-solid fa-gauge-simple-high text-slate-400"></i> ${recipe.difficulty}</span>
+                            </div>
+                        </div>
+
+                        <div class="px-6 pb-6 pt-0">
+                            <button onclick="openRecipeModal(${index})" class="w-full py-2.5 bg-slate-900 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-2">
+                                Ver Receta Paso a Paso <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                        </div>
+                    `;
+                    recipesGrid.appendChild(card);
+                });
+            }
+
+            // Show results container smoothly
+            document.getElementById('resultsSection').classList.remove('hidden');
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Open Recipe Modal with complete details
+        function openRecipeModal(index) {
+            const recipe = currentRecipes[index];
+            if (!recipe) return;
+
+            document.getElementById('modalTitle').textContent = recipe.title;
+            document.getElementById('modalDescription').textContent = recipe.description;
+            document.getElementById('modalCategory').textContent = recipe.category || 'Chef Recomendación';
+            document.getElementById('modalTime').textContent = recipe.prep_time || '15-20 min';
+            document.getElementById('modalDifficulty').textContent = recipe.difficulty || 'Media';
+            document.getElementById('modalMatch').textContent = `${recipe.match_percentage || 90}%`;
+
+            // Ingredients
+            const ingList = document.getElementById('modalIngredients');
+            ingList.innerHTML = '';
+            (recipe.ingredients || []).forEach(ing => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0';
+                
+                const isAvailable = ing.available !== false;
+                li.innerHTML = `
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid ${isAvailable ? 'fa-circle-check text-emerald-500' : 'fa-circle-plus text-amber-500'} text-xs"></i>
+                        <span class="${isAvailable ? 'font-medium text-slate-700' : 'text-slate-500 italic'}">${ing.name}</span>
+                    </span>
+                    <span class="text-xs text-slate-400 font-mono">${ing.amount || ''}</span>
+                `;
+                ingList.appendChild(li);
+            });
+
+            // Steps
+            const stepsList = document.getElementById('modalSteps');
+            stepsList.innerHTML = '';
+            (recipe.steps || []).forEach((step, stepIdx) => {
+                const li = document.createElement('li');
+                li.className = 'flex gap-3 items-start';
+                li.innerHTML = `
+                    <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
+                        ${stepIdx + 1}
+                    </span>
+                    <p class="text-xs text-slate-600 leading-relaxed pt-0.5">${step}</p>
+                `;
+                stepsList.appendChild(li);
+            });
+
+            document.getElementById('recipeModal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Close Modal
+        function closeModal() {
+            document.getElementById('recipeModal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+    </script>
+</body>
+</html>
