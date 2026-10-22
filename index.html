@@ -67,13 +67,50 @@
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-medium border border-emerald-200 flex items-center gap-1.5">
+                <button onclick="toggleApiKeyModal()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-full font-medium border border-slate-300 flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-key text-amber-500"></i>
+                    <span id="apiKeyStatusText">Configurar API Key</span>
+                </button>
+                <span class="text-xs bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full font-medium border border-emerald-200 hidden sm:flex items-center gap-1.5">
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     Gemini 3 Flash Vision
                 </span>
             </div>
         </div>
     </header>
+
+    <!-- Modal Configuración API Key -->
+    <div id="apiKeyModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 relative">
+            <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-key text-amber-500"></i> Ingresar API Key de Gemini
+            </h3>
+            <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+                Para ejecutar la aplicación desde GitHub o en local, necesitas ingresar tu propia API Key de Google Gemini. Se guardará de forma segura únicamente en tu navegador (`localStorage`).
+            </p>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Tu Gemini API Key</label>
+                <input type="password" id="customApiKeyInput" placeholder="AIzaSy..." class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            </div>
+
+            <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 mb-5 flex items-start gap-2">
+                <i class="fa-solid fa-circle-info text-amber-600 mt-0.5"></i>
+                <div>
+                    ¿No tienes una clave? Puedes obtenerla de forma gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline font-bold hover:text-amber-900">Google AI Studio</a>.
+                </div>
+            </div>
+
+            <div class="flex gap-2 justify-end">
+                <button onclick="toggleApiKeyModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-medium transition">
+                    Cancelar
+                </button>
+                <button onclick="saveCustomApiKey()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition">
+                    Guardar Clave
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Container -->
     <main class="max-w-5xl mx-auto px-4 py-8 flex-grow w-full">
@@ -287,6 +324,43 @@
         let activeTags = [];
         let currentRecipes = [];
 
+        // Check for saved API Key on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedKey = localStorage.getItem('gemini_custom_api_key');
+            if (savedKey) {
+                document.getElementById('customApiKeyInput').value = savedKey;
+                updateApiKeyStatusUI(true);
+            }
+        });
+
+        function toggleApiKeyModal() {
+            const modal = document.getElementById('apiKeyModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function saveCustomApiKey() {
+            const key = document.getElementById('customApiKeyInput').value.trim();
+            if (key) {
+                localStorage.setItem('gemini_custom_api_key', key);
+                updateApiKeyStatusUI(true);
+            } else {
+                localStorage.removeItem('gemini_custom_api_key');
+                updateApiKeyStatusUI(false);
+            }
+            toggleApiKeyModal();
+        }
+
+        function updateApiKeyStatusUI(hasKey) {
+            const statusText = document.getElementById('apiKeyStatusText');
+            if (hasKey) {
+                statusText.textContent = "API Key Configurada ✓";
+                statusText.classList.add("text-emerald-600");
+            } else {
+                statusText.textContent = "Configurar API Key";
+                statusText.classList.remove("text-emerald-600");
+            }
+        }
+
         // Toggle restriction tags
         function toggleTag(btn) {
             const val = btn.getAttribute('data-value');
@@ -362,6 +436,17 @@
                 return;
             }
 
+            // Check if API Key exists before proceeding
+            let userApiKey = localStorage.getItem('gemini_custom_api_key') || "";
+            if (!userApiKey.trim()) {
+                toggleApiKeyModal();
+                const keySaved = await waitForApiKey();
+                if (!keySaved) {
+                    return; // User canceled or closed modal without saving a key
+                }
+                userApiKey = localStorage.getItem('gemini_custom_api_key') || "";
+            }
+
             // UI Adjustments for Loading
             document.getElementById('resultsSection').classList.add('hidden');
             document.getElementById('loadingState').classList.remove('hidden');
@@ -434,8 +519,7 @@ RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquem
                 }
             };
 
-            const apiKey = ""; // Runtime automatically injects the API key
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${userApiKey}`;
 
             try {
                 const response = await fetchWithBackoff(apiUrl, {
@@ -446,6 +530,10 @@ RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquem
 
                 const result = await response.json();
                 
+                if (result.error) {
+                    throw new Error(result.error.message || "Error devuelto por la API de Gemini.");
+                }
+
                 if (result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
                     const rawJson = result.candidates[0].content.parts[0].text;
                     const parsedData = JSON.parse(rawJson);
@@ -457,7 +545,7 @@ RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquem
 
             } catch (error) {
                 console.error("Error al analizar la imagen:", error);
-                alert("Ocurrió un error al procesar la imagen con la Inteligencia Artificial. Inténtalo de nuevo.");
+                alert("Ocurrió un error al procesar la imagen con la IA: " + error.message + "\n\nPor favor verifica tu API Key haciendo clic en el botón 'Configurar API Key' arriba.");
             } finally {
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('scanLine').classList.add('hidden');
@@ -465,62 +553,92 @@ RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquem
             }
         }
 
+        // Helper promise to wait until user enters and saves key or closes modal
+        function waitForApiKey() {
+            return new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                    const modal = document.getElementById('apiKeyModal');
+                    const savedKey = localStorage.getItem('gemini_custom_api_key');
+                    
+                    // Modal closed
+                    if (modal.classList.contains('hidden')) {
+                        clearInterval(checkInterval);
+                        resolve(!!savedKey);
+                    }
+                }, 200);
+            });
+        }
+
         // Render ingredients and recipes onto the DOM
         function renderResults(data) {
-            const ingredientsContainer = document.getElementById('detectedIngredientsList');
-            const ingredientCount = document.getElementById('ingredientCount');
+            const detectedList = document.getElementById('detectedIngredientsList');
+            const countBadge = document.getElementById('ingredientCount');
             const recipesGrid = document.getElementById('recipesGrid');
 
-            // 1. Render Detected Ingredients
-            ingredientsContainer.innerHTML = '';
+            // Clear previous results
+            detectedList.innerHTML = '';
+            recipesGrid.innerHTML = '';
+
+            // Render Detected Ingredients
             const ingredients = data.detected_ingredients || [];
-            ingredientCount.textContent = `${ingredients.length} detectados`;
+            countBadge.textContent = `${ingredients.length} detectados`;
 
             if (ingredients.length === 0) {
-                ingredientsContainer.innerHTML = '<span class="text-xs text-slate-400">No se detectaron productos claramente.</span>';
+                detectedList.innerHTML = `<span class="text-xs text-slate-400 italic">No se identificaron ingredientes específicos de forma clara.</span>`;
             } else {
-                ingredients.forEach(item => {
+                ingredients.forEach(ing => {
                     const badge = document.createElement('span');
-                    badge.className = 'text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-xl font-medium border border-slate-200 flex items-center gap-1.5 transition';
-                    badge.innerHTML = `<i class="fa-solid fa-check text-emerald-500 text-[10px]"></i> ${item}`;
-                    ingredientsContainer.appendChild(badge);
+                    badge.className = 'bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1.5';
+                    badge.innerHTML = `<i class="fa-solid fa-check text-emerald-500"></i> ${ing}`;
+                    detectedList.appendChild(badge);
                 });
             }
 
-            // 2. Render Recipes
-            recipesGrid.innerHTML = '';
+            // Save recipes to global state
             currentRecipes = data.recipes || [];
 
+            // Render Recipes Cards
             if (currentRecipes.length === 0) {
-                recipesGrid.innerHTML = '<p class="col-span-full text-center text-slate-500 py-8">No encontramos recetas suficientes con lo visto. Intenta subir otra foto más clara.</p>';
+                recipesGrid.innerHTML = `
+                    <div class="col-span-full text-center py-8 bg-white rounded-2xl border border-slate-200">
+                        <i class="fa-solid fa-utensils text-3xl text-slate-300 mb-2"></i>
+                        <p class="text-sm font-semibold text-slate-600">No se pudieron generar recetas con los ingredientes detectados.</p>
+                        <p class="text-xs text-slate-400 mt-1">Intenta tomar una foto con mejor iluminación o agregar ingredientes manualmente.</p>
+                    </div>
+                `;
             } else {
-                currentRecipes.forEach((recipe, index) => {
+                currentRecipes.forEach((recipe, idx) => {
                     const card = document.createElement('div');
-                    card.className = 'bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md hover:border-emerald-300 transition duration-300 flex flex-col justify-between';
+                    card.className = 'bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-emerald-300 transition group';
                     
                     card.innerHTML = `
-                        <div class="p-6">
-                            <div class="flex items-center justify-between gap-2 mb-2">
-                                <span class="text-[11px] font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-bold text-emerald-600 uppercase tracking-wider bg-emerald-50 px-2.5 py-1 rounded-lg">
                                     ${recipe.category || 'Receta Sugerida'}
                                 </span>
-                                <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                    ${recipe.match_percentage || 90}% match
+                                <span class="text-xs font-bold text-slate-500 flex items-center gap-1">
+                                    <i class="fa-solid fa-clock text-slate-400"></i> ${recipe.prep_time || '20 mins'}
                                 </span>
                             </div>
-                            
-                            <h4 class="text-lg font-bold text-slate-900 mb-2 line-clamp-1">${recipe.title}</h4>
-                            <p class="text-xs text-slate-500 mb-4 line-clamp-2 leading-relaxed">${recipe.description}</p>
-                            
-                            <div class="flex items-center gap-4 text-xs text-slate-500 font-medium pt-3 border-t border-slate-100">
-                                <span class="flex items-center gap-1"><i class="fa-regular fa-clock text-slate-400"></i> ${recipe.prep_time}</span>
-                                <span class="flex items-center gap-1"><i class="fa-solid fa-gauge-simple-high text-slate-400"></i> ${recipe.difficulty}</span>
-                            </div>
+                            <h4 class="font-bold text-slate-800 text-lg group-hover:text-emerald-600 transition mb-2">
+                                ${recipe.title}
+                            </h4>
+                            <p class="text-xs text-slate-500 line-clamp-2 mb-4 leading-relaxed">
+                                ${recipe.description}
+                            </p>
                         </div>
 
-                        <div class="px-6 pb-6 pt-0">
-                            <button onclick="openRecipeModal(${index})" class="w-full py-2.5 bg-slate-900 hover:bg-emerald-600 text-white text-xs font-semibold rounded-xl transition duration-200 flex items-center justify-center gap-2">
-                                Ver Receta Paso a Paso <i class="fa-solid fa-arrow-right"></i>
+                        <div>
+                            <div class="flex items-center justify-between border-t border-slate-100 pt-3 mt-2 text-xs">
+                                <span class="text-slate-500">Dificultad: <strong class="text-slate-700">${recipe.difficulty || 'Fácil'}</strong></span>
+                                <span class="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                    ${recipe.match_percentage || 90}% coincidencia
+                                </span>
+                            </div>
+
+                            <button onclick="openModal(${idx})" class="w-full mt-4 py-2.5 bg-slate-900 hover:bg-emerald-600 text-white text-xs font-bold rounded-xl transition shadow-sm flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-book-open"></i> Ver Paso a Paso
                             </button>
                         </div>
                     `;
@@ -528,64 +646,70 @@ RESPONDE ÚNICAMENTE EN FORMATO JSON siguiendo estrictamente el siguiente esquem
                 });
             }
 
-            // Show results container smoothly
+            // Show results container
             document.getElementById('resultsSection').classList.remove('hidden');
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Open Recipe Modal with complete details
-        function openRecipeModal(index) {
-            const recipe = currentRecipes[index];
+        // Modal Functions
+        function openModal(recipeIndex) {
+            const recipe = currentRecipes[recipeIndex];
             if (!recipe) return;
 
+            document.getElementById('modalCategory').textContent = recipe.category || 'Receta Sugerida';
             document.getElementById('modalTitle').textContent = recipe.title;
             document.getElementById('modalDescription').textContent = recipe.description;
-            document.getElementById('modalCategory').textContent = recipe.category || 'Chef Recomendación';
-            document.getElementById('modalTime').textContent = recipe.prep_time || '15-20 min';
-            document.getElementById('modalDifficulty').textContent = recipe.difficulty || 'Media';
+            document.getElementById('modalTime').textContent = recipe.prep_time || '20 mins';
+            document.getElementById('modalDifficulty').textContent = recipe.difficulty || 'Fácil';
             document.getElementById('modalMatch').textContent = `${recipe.match_percentage || 90}%`;
 
-            // Ingredients
-            const ingList = document.getElementById('modalIngredients');
-            ingList.innerHTML = '';
+            // Render Ingredients with indicator for available vs missing
+            const ingredientsContainer = document.getElementById('modalIngredients');
+            ingredientsContainer.innerHTML = '';
             (recipe.ingredients || []).forEach(ing => {
                 const li = document.createElement('li');
-                li.className = 'flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0';
+                li.className = 'flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100';
                 
                 const isAvailable = ing.available !== false;
+                const icon = isAvailable 
+                    ? '<i class="fa-solid fa-circle-check text-emerald-500 mr-2"></i>' 
+                    : '<i class="fa-solid fa-circle-minus text-amber-500 mr-2"></i>';
+                
+                const badge = isAvailable 
+                    ? '<span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">Tienes</span>' 
+                    : '<span class="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Opcional / Despensa</span>';
+
                 li.innerHTML = `
-                    <span class="flex items-center gap-2">
-                        <i class="fa-solid ${isAvailable ? 'fa-circle-check text-emerald-500' : 'fa-circle-plus text-amber-500'} text-xs"></i>
-                        <span class="${isAvailable ? 'font-medium text-slate-700' : 'text-slate-500 italic'}">${ing.name}</span>
+                    <span class="flex items-center">
+                        ${icon}
+                        <strong class="text-slate-700 font-medium">${ing.name}</strong>
+                        <span class="text-slate-400 text-xs ml-1 font-normal">(${ing.amount || 'al gusto'})</span>
                     </span>
-                    <span class="text-xs text-slate-400 font-mono">${ing.amount || ''}</span>
+                    ${badge}
                 `;
-                ingList.appendChild(li);
+                ingredientsContainer.appendChild(li);
             });
 
-            // Steps
-            const stepsList = document.getElementById('modalSteps');
-            stepsList.innerHTML = '';
-            (recipe.steps || []).forEach((step, stepIdx) => {
+            // Render Preparation Steps
+            const stepsContainer = document.getElementById('modalSteps');
+            stepsContainer.innerHTML = '';
+            (recipe.steps || []).forEach((step, idx) => {
                 const li = document.createElement('li');
-                li.className = 'flex gap-3 items-start';
+                li.className = 'flex gap-3 text-slate-600';
                 li.innerHTML = `
-                    <span class="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
-                        ${stepIdx + 1}
+                    <span class="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 font-bold text-xs flex items-center justify-center border border-emerald-200">
+                        ${idx + 1}
                     </span>
-                    <p class="text-xs text-slate-600 leading-relaxed pt-0.5">${step}</p>
+                    <p class="text-xs sm:text-sm pt-0.5 leading-relaxed">${step}</p>
                 `;
-                stepsList.appendChild(li);
+                stepsContainer.appendChild(li);
             });
 
             document.getElementById('recipeModal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
         }
 
-        // Close Modal
         function closeModal() {
             document.getElementById('recipeModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
         }
     </script>
 </body>
